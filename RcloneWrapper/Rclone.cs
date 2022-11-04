@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.NetworkInformation;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -15,8 +14,8 @@ namespace RcloneWrapper
         /// <summary>
         /// Use --quiet --progress --stats-one-line, without any -v for the best experience
         /// </summary>
-        public event EventHandler<StatsProgress> OnProgress;
-
+        public event EventHandler<int> OnProgress;
+       
         public string RcloneExe { get; set; } = "rclone";
 
         private Process CreateProcess(string args, bool redirectStandardOutput)
@@ -45,16 +44,16 @@ namespace RcloneWrapper
         {
             cancellationToken.Register(() =>
             {
-                //Send SIGINT
-                //proc.WaitForExit(2000);
-                //proc.Kill():
-
-                proc.Kill();
+                try { proc.Kill(); }
+                catch { }
 
             }, false);
 
             proc.Start();
             await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
 
             if (proc.ExitCode != 0 && proc.ExitCode != 9)
             {
@@ -84,7 +83,7 @@ namespace RcloneWrapper
             }
         }
 
-        public async Task<int> RunAsync(string args, CancellationToken cancellationToken = default)
+        public async Task<int> RunAsync(string args, IProgress<int> progress = null, CancellationToken cancellationToken = default)
         {
             using var proc = CreateProcess(args, true);
 
@@ -102,70 +101,34 @@ namespace RcloneWrapper
             //My better but not yet available solution: I asked the rclone dev team to put a trailing \0 char at the end
             //of the line
 
-            var cq = new ConcurrentQueue<StatsProgress>();
+            //Until then, I'm doing a simple search for percent only
+
+            var cq = new ConcurrentQueue<int>();
 
             var task2 = Task.Run(() =>
             {
                 string data = null;
 
-                StatsProgress lastProgress = null;
+                int lastPercent = -1;
+
                 Span<char> buffer = new char[1024];
                 while (true)
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                        return;
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     int read = proc.StandardOutput.Read(buffer);
                     if (read < 1)
                         return;
 
-                    data += buffer[..read].ToString();
-
-                    //Error messages have \n before and after                    
-                    var lines = data.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToList();
-                    for (int i = 0; i < lines.Count; i++)
-                    {
-                        string line = lines[i];
-                        if (!string.IsNullOrWhiteSpace(line))
-                        {
-                            if (double.TryParse(line.Substring(0, line.IndexOf(' ')), out _))
+                    data = buffer[..read].ToString();
+                    var parts = data.Split(',');
+                    foreach (string part in parts.Where(item => item.Trim().EndsWith('%')))
+                        if (int.TryParse(part.Trim().Trim('%'), out int newPercent))
+                            if (newPercent != lastPercent)
                             {
-                                while (line.Length > 0)
-                                {
-                                    // 0 B / 14.195 MiB, 0%, 0 B/s, ETA -
-
-                                    int etaPos = line.IndexOf("ETA ");
-                                    if (etaPos < 0)
-                                        break;
-
-                                    int lineLength = line.Length;
-                                    int endPos = line.IndexOf(')', etaPos);
-                                    if (endPos < 0)
-                                        endPos = line.IndexOf('-', etaPos);
-                                    if (endPos < 0)
-                                        endPos = line.IndexOf('s', etaPos);
-                                    if (endPos < 0)
-                                        break;
-
-                                    var raw = line[..(endPos + 1)];
-                                    line = line[raw.Length..];
-                                    var newProgress = new StatsProgress(raw);
-                                    if (newProgress != lastProgress)
-                                    {
-                                        lastProgress = newProgress;
-                                        cq.Enqueue(newProgress);
-                                    }
-
-                                }
-                                lines[i] = line;
+                                lastPercent = newPercent;
+                                cq.Enqueue(newPercent);
                             }
-                        }
-                    }
-
-                    //Didn't find the end of the line, so cache what info we have so far
-                    if(lines.Count > 0)
-                        data = lines.Last();
-
                 }
             }, cancellationToken);
 
@@ -175,12 +138,15 @@ namespace RcloneWrapper
             {
                 while (!(proc.HasExited && cq.IsEmpty))
                 {
-                    if (cancellationToken.IsCancellationRequested)
-                        return;
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    if (cq.TryDequeue(out StatsProgress newProgress))
-                        try { OnProgress.Invoke(this, newProgress); }
+                    if (cq.TryDequeue(out int newProgress))
+                    {
+                        try { OnProgress?.Invoke(this, newProgress); }
                         catch { }
+                        try { progress?.Report(newProgress); }
+                        catch { }
+                    }
                 }
             }, cancellationToken);
 
@@ -192,8 +158,8 @@ namespace RcloneWrapper
         /// <summary>
         /// Designed to be run with args: --quiet --progress --stats-one-line, without any -v
         /// </summary>
-        public Task<int> RunAsync(CommandLineBuilder builder, CancellationToken cancellationToken = default) =>
-            RunAsync(builder.Build(), cancellationToken);
+        public Task<int> RunAsync(CommandLineBuilder builder, IProgress<int> progress = null, CancellationToken cancellationToken = default) =>
+            RunAsync(builder.Build(), progress, cancellationToken);
 
 
         /// <summary>
