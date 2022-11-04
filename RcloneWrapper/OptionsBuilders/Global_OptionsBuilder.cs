@@ -187,6 +187,15 @@ namespace RcloneWrapper.OptionsBuilders
             Leaf
         }
 
+        public Global_OptionsBuilder(bool setPogress = false, string timestampBackupDir = null)
+        {
+            if (setPogress)
+                SetProgressForWrapper();
+
+            if (!string.IsNullOrWhiteSpace(timestampBackupDir))
+                SetupTimestampBackup(timestampBackupDir);
+        }
+
 
         /// <summary>
         /// Allow prompt for password for encrypted configuration (default true)
