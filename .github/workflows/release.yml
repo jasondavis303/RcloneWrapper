@@ -19,6 +19,6 @@ jobs:
 
       - name: Build
         run: |
-            dotnet pack -c release -o nuget /p:Version 1.6.0.${{ github.run_number }}
+            dotnet pack -c release -o nuget /p:Version 1.6.0.${{github.run_number}} "RcloneWrapper/RcloneWrapper.cproj"
             
         
