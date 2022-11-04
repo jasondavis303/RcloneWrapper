@@ -105,5 +105,15 @@ namespace RcloneWrapper
         {
             return !(left == right);
         }
+
+        public static bool operator >(StatsProgress left, StatsProgress right)
+        {
+            return left.PercentCompleted > right.PercentCompleted;
+        }
+
+        public static bool operator <(StatsProgress left, StatsProgress right)
+        {
+            return left.PercentCompleted < right.PercentCompleted;
+        }
     }
 }
