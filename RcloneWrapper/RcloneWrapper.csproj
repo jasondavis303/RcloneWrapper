@@ -7,7 +7,6 @@
     <Description>Command line wrapper for rclone</Description>
     <Copyright>jasondavis303</Copyright>
     <PackageProjectUrl>https://github.com/jasondavis303/RcloneWrapper</PackageProjectUrl>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/jasondavis303/RcloneWrapper.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>rclone;command-line-wrapper</PackageTags>
