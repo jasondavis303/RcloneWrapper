@@ -2,7 +2,27 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <GenerateDocumentationFile>True</GenerateDocumentationFile>
+    <Authors>Jason Davis</Authors>
+    <Company>jasondavis303</Company>
+    <Description>Command line wrapper for rclone</Description>
+    <Copyright>jasondavis303</Copyright>
+    <PackageProjectUrl>https://github.com/jasondavis303/RcloneWrapper</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/jasondavis303/RcloneWrapper.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>rclone;command-line-wrapper</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+
+	<!-- Leave the revision as zero, it will be set by github actions -->
+	<Version>1.6.0.0</Version>
+	  
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 
 </Project>
