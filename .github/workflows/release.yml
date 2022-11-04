@@ -20,5 +20,5 @@ jobs:
       - name: Build
         run: |
             dotnet pack -c release -o nuget -p:Version=1.6.0.${{ github.run_number }}
-            
+            dotnet nuget push "nuget/*.nupkg" -k ${{ secrets.NUGET_KEY }}
         
