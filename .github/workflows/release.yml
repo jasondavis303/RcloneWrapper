@@ -19,7 +19,6 @@ jobs:
 
       - name: Build
         run: |
-            dotnet pack -c release -o nuget /p:Version 1.6.0.${{ github.run_number }} /p:PackageVersion 1.6.0.${{ github.run_number }}
-            #dotnet nuget push "nuget/*.nupkg" --skip-duplicate -k ${{secrets.NUGET_KEY}} -s https://api.nuget.org/v3/index.json
-        
+            dotnet pack -c release -o nuget /p:Version 1.6.0.${{ github.run_number }}
+            
         
