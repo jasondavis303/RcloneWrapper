@@ -13,7 +13,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
 
 	<!-- Leave the revision as zero, it will be set by github actions -->
-	<Version>1.6.0.0</Version>
+	<Version>1.60.0.0</Version>
 	  
   </PropertyGroup>
 
