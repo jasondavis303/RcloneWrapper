@@ -109,7 +109,7 @@ namespace RcloneWrapper
             {
                 string data = null;
 
-                int lastPercent = -1;
+                int lastPercent = 0;
 
                 Span<char> buffer = new char[1024];
                 while (true)
