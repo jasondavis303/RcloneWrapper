@@ -7,29 +7,29 @@ using System.Linq;
 
 namespace RcloneWrapper
 {
-    public class CommandLineBuilder
+    public class RcloneOptionsBuilder
     {
         private readonly string _command;
 
         private readonly List<string> _options = new();
 
-        private CommandLineBuilder() { }
+        private RcloneOptionsBuilder() { }
 
 
-        internal CommandLineBuilder(params string[] commands)
+        internal RcloneOptionsBuilder(params string[] commands)
         {
             _command = string.Join(' ', commands).Trim();
             if (string.IsNullOrWhiteSpace(_command))
                 throw new ArgumentNullException(nameof(commands));
         }
 
-        internal CommandLineBuilder(IEnumerable<string> commands, IOptionsBuilder options) : this(commands.ToArray())
+        internal RcloneOptionsBuilder(IEnumerable<string> commands, IOptionsBuilder options) : this(commands.ToArray())
         {
             if (options != null)
                 AddOptions(options);
         }
 
-        internal CommandLineBuilder(IOptionsBuilder options, params string[] commands) : this(commands)
+        internal RcloneOptionsBuilder(IOptionsBuilder options, params string[] commands) : this(commands)
         {
             if (options != null)
                 AddOptions(options);
@@ -113,24 +113,24 @@ namespace RcloneWrapper
 
 
 
-        public static CommandLineBuilder Command(string command, IOptionsBuilder options = null) => new(options, command);
+        public static RcloneOptionsBuilder Command(string command, IOptionsBuilder options = null) => new(options, command);
 
         /// <summary>
         /// Prints quota information about a remote
         /// </summary>
-        public static CommandLineBuilder About(string remote, bool full = false, bool json = false, IOptionsBuilder options = null) => new(options, "about", remote, full ? "--full" : null, json ? "--json" : null);
+        public static RcloneOptionsBuilder About(string remote, bool full = false, bool json = false, IOptionsBuilder options = null) => new(options, "about", remote, full ? "--full" : null, json ? "--json" : null);
 
         /// <summary>
         /// Used to authorize a remote or headless rclone from a machine with a browser - use as instructed by rclone config.
         /// </summary>
         /// <param name="authNoOpenBrowser">Do not automatically open auth link in default browser</param>
-        public static CommandLineBuilder Authorize(string remote, bool authNoOpenBrowser = false, IOptionsBuilder options = null) => new(options, "authorize", remote, authNoOpenBrowser ? "--auth-no-open-browser" : null);
+        public static RcloneOptionsBuilder Authorize(string remote, bool authNoOpenBrowser = false, IOptionsBuilder options = null) => new(options, "authorize", remote, authNoOpenBrowser ? "--auth-no-open-browser" : null);
 
         /// <summary>
         /// Run a backend-specific command.
         /// </summary>
         /// <param name="json">Always output in JSON format</param>
-        public static CommandLineBuilder Backend(string remote, bool json = false, IOptionsBuilder options = null) 
+        public static RcloneOptionsBuilder Backend(string remote, bool json = false, IOptionsBuilder options = null) 
             => new(options, "backend", remote, json ? "--json" : null);
 
         /// <summary>
@@ -147,7 +147,7 @@ namespace RcloneWrapper
         /// <param name="resync">Performs the resync run. Path1 files may overwrite Path2 versions. Consider using --verbose or --dry-run first.</param>
         /// <param name="workdir">Use custom working dir - useful for testing. (default: $HOME/.cache/rclone/bisync)</param>
         /// <returns></returns>
-        public static CommandLineBuilder BiSync(string remotePath1, string remotePath2, bool checkAccess = false, string checkFilename = null,
+        public static RcloneOptionsBuilder BiSync(string remotePath1, string remotePath2, bool checkAccess = false, string checkFilename = null,
                                                 string checkSync = null, string filtersFile = null, bool force = false, bool localTime = false,
                                                 bool noCleanup = false, bool removeEmptyDirs = false, bool resync = false, string workdir = null,
                                                 IOptionsBuilder options = null)
@@ -165,7 +165,7 @@ namespace RcloneWrapper
             AddOptionalArg(lst, "resync", resync);
             AddOptionalArg(lst, "workdir", workdir);
 
-            return new CommandLineBuilder(lst, options);
+            return new RcloneOptionsBuilder(lst, options);
         }
 
         /// <summary>
@@ -177,7 +177,7 @@ namespace RcloneWrapper
         /// <param name="offset">Start printing at offset N (or from end if -ve)</param>
         /// <param name="tail">Only print the last N characters</param>
         /// <returns></returns>
-        public static CommandLineBuilder Cat(string remotePath,
+        public static RcloneOptionsBuilder Cat(string remotePath,
                                              int? count = null,
                                              bool discard = false,
                                              int? head = null,
@@ -193,7 +193,7 @@ namespace RcloneWrapper
             AddOptionalArg(lst, "offset", offset);
             AddOptionalArg(lst, "tail", tail);
 
-            return new CommandLineBuilder(lst, options);
+            return new RcloneOptionsBuilder(lst, options);
         }
 
         /// <summary>
@@ -208,7 +208,7 @@ namespace RcloneWrapper
         /// <param name="missingOnSrc">Report all files missing from the source to this file</param>
         /// <param name="missingOnDst">Report all files missing from the destination to this file</param>
         /// <param name="oneWay">Check one way only, source files must exist on remote</param>
-        public static CommandLineBuilder Check(string remotePathSrc, string remotePathDst, string checkFile = null, string combined = null, string differ = null,
+        public static RcloneOptionsBuilder Check(string remotePathSrc, string remotePathDst, string checkFile = null, string combined = null, string differ = null,
                                                bool download = false, string error = null, string match = null, string missingOnSrc = null, string missingOnDst = null,
                                                bool oneWay = false, IOptionsBuilder options = null)
         {
@@ -240,7 +240,7 @@ namespace RcloneWrapper
         /// <param name="missingOnSrc">Report all files missing from the source to this file</param>
         /// <param name="missingOnDst">Report all files missing from the destination to this file</param>
         /// <param name="oneWay">Check one way only, source files must exist on remote</param>
-        public static CommandLineBuilder CheckSum(string remotePath, string sumFile, string hash = null, string combined = null, string differ = null, bool download = false,
+        public static RcloneOptionsBuilder CheckSum(string remotePath, string sumFile, string hash = null, string combined = null, string differ = null, bool download = false,
                                                   string error = null, string match = null, string missingOnSrc = null, string missingOnDst = null, bool oneWay = false, IOptionsBuilder options = null)
         {
             var lst = new List<string> { "checksum" };
@@ -263,24 +263,24 @@ namespace RcloneWrapper
         /// <summary>
         /// Clean up the remote if possible.Empty the trash or delete old file versions. Not supported by all remotes.
         /// </summary>
-        public static CommandLineBuilder Cleanup(string remotePath, IOptionsBuilder options = null) => new(options, "cleanup", remotePath);
+        public static RcloneOptionsBuilder Cleanup(string remotePath, IOptionsBuilder options = null) => new(options, "cleanup", remotePath);
 
         /// <summary>
         /// Dump the config file as JSON.
         /// </summary>
-        public static CommandLineBuilder ConfigDump() => new("config", "dump");
+        public static RcloneOptionsBuilder ConfigDump() => new("config", "dump");
 
         /// <summary>
         /// Copy files from source to dest, skipping identical files.
         /// </summary>
         /// <param name="createEmptySrcDirs">Create empty source dirs on destination after copy</param>
-        public static CommandLineBuilder Copy(string remotePathSrc, string remotePathDst, bool createEmptySrcDirs = false, IOptionsBuilder options = null) =>
+        public static RcloneOptionsBuilder Copy(string remotePathSrc, string remotePathDst, bool createEmptySrcDirs = false, IOptionsBuilder options = null) =>
             new(options, "copy", remotePathSrc, remotePathDst, createEmptySrcDirs ? "--create-empty-src-dirs" : null);
 
         /// <summary>
         /// Copy files from source to dest, skipping identical files.
         /// </summary>
-        public static CommandLineBuilder CopyTo(string remotePathSrc, string remotePathDst, IOptionsBuilder options = null) => new(options, "copyto", remotePathSrc, remotePathDst);
+        public static RcloneOptionsBuilder CopyTo(string remotePathSrc, string remotePathDst, IOptionsBuilder options = null) => new(options, "copyto", remotePathSrc, remotePathDst);
 
 
         /// <summary>
@@ -292,7 +292,7 @@ namespace RcloneWrapper
         /// <param name="printFilename">Print the resulting name from --auto-filename</param>
         /// <param name="stdout">Write the output to stdout rather than a file</param>
         /// <returns></returns>
-        public static CommandLineBuilder CopyUrl(string url,
+        public static RcloneOptionsBuilder CopyUrl(string url,
                                                  string remotePathDst,
                                                  bool autoFilename = false,
                                                  bool headerFilename = false,
@@ -321,7 +321,7 @@ namespace RcloneWrapper
         /// <param name="missingOnDst">Report all files missing from the destination to this file</param>
         /// <param name="missingOnSrc">Report all files missing from the source to this file</param>
         /// <param name="oneWay">Check one way only, source files must exist on remote</param>
-        public static CommandLineBuilder CryptCheck(string remotePathSrc,
+        public static RcloneOptionsBuilder CryptCheck(string remotePathSrc,
                                                     string remotePathDst,
                                                     string combined = null,
                                                     string differ = null,
@@ -347,13 +347,13 @@ namespace RcloneWrapper
         /// <summary>
         /// Check one way only, source files must exist on remote
         /// </summary>
-        public static CommandLineBuilder CryptDecode(string remote, params string[] filenames) => CryptDecode(false, remote, filenames);
+        public static RcloneOptionsBuilder CryptDecode(string remote, params string[] filenames) => CryptDecode(false, remote, filenames);
 
         /// <summary>
         /// Check one way only, source files must exist on remote
         /// </summary>
         /// <param name="reverse">Reverse cryptdecode, encrypts filenames</param>
-        public static CommandLineBuilder CryptDecode(bool reverse, string remote, params string[] filenames)
+        public static RcloneOptionsBuilder CryptDecode(bool reverse, string remote, params string[] filenames)
         {
             var lst = new List<string> { "cryptdecode" };
             AddOptionalArg(lst, "reverse", reverse);
@@ -366,14 +366,14 @@ namespace RcloneWrapper
         /// Remove the files in path.
         /// </summary>
         /// <param name="rmDirs">Removes empty directories but leaves root intact</param>
-        public static CommandLineBuilder Delete(string remotePath,
+        public static RcloneOptionsBuilder Delete(string remotePath,
                                                 bool rmDirs = false,
                                                 IOptionsBuilder options = null) => new(options, "delete", remotePath, rmDirs ? "--rmdirs" : null);
 
         /// <summary>
         /// Remove a single file from remote.
         /// </summary>
-        public static CommandLineBuilder DeleteFile(string remotePath, IOptionsBuilder options = null) => new(options, "deletefile", remotePath);
+        public static RcloneOptionsBuilder DeleteFile(string remotePath, IOptionsBuilder options = null) => new(options, "deletefile", remotePath);
 
 
         /// <summary>
@@ -383,7 +383,7 @@ namespace RcloneWrapper
         /// <param name="checkFile">Validate hashes against a given SUM file instead of printing them</param>
         /// <param name="download">Download the file and hash it locally; if this flag is not specified, the hash is requested from the remote</param>
         /// <param name="outputFile"Output hashsums to a file rather than the terminal></param>
-        public static CommandLineBuilder HashSum(string remotePath,
+        public static RcloneOptionsBuilder HashSum(string remotePath,
                                                  bool base64 = false,
                                                  string checkFile = null,
                                                  bool download = false,
@@ -405,7 +405,7 @@ namespace RcloneWrapper
         /// </summary>
         /// <param name="duration">The amount of time that the link will be valid (default off)</param>
         /// <param name="unlink">Remove existing public link to file/folder</param>
-        public static CommandLineBuilder Link(string remotePath, TimeSpan? duration = null, bool unlink = false, IOptionsBuilder options = null)
+        public static RcloneOptionsBuilder Link(string remotePath, TimeSpan? duration = null, bool unlink = false, IOptionsBuilder options = null)
         {
             var lst = new List<string> { "link", remotePath };
 
@@ -419,12 +419,12 @@ namespace RcloneWrapper
         /// List all the remotes in the config file
         /// </summary>
         /// <param name="lng">Show the type as well as names</param>
-        public static CommandLineBuilder ListRemotes(bool lng = false) => new("listremotes", lng ? "--long" : null);
+        public static RcloneOptionsBuilder ListRemotes(bool lng = false) => new("listremotes", lng ? "--long" : null);
 
         /// <summary>
         /// List the objects in the path with size and path.
         /// </summary>
-        public static CommandLineBuilder LS(string remotePath, IOptionsBuilder options = null) => new(options, "ls", remotePath);
+        public static RcloneOptionsBuilder LS(string remotePath, IOptionsBuilder options = null) => new(options, "ls", remotePath);
 
 
         /// <summary>
@@ -450,7 +450,7 @@ namespace RcloneWrapper
         /// <param name="hash">Use this hash when h is used in the format MD5|SHA-1|DropboxHash (default "md5")</param>
         /// <param name="recursive">Recurse into the listing</param>
         /// <param name="separator">Separator for the items in the format (default ";")</param>
-        public static CommandLineBuilder LSF(string remotePath,
+        public static RcloneOptionsBuilder LSF(string remotePath,
                                              bool absolute = false,
                                              bool csv = false,
                                              bool dirSlash = true,
@@ -491,7 +491,7 @@ namespace RcloneWrapper
         /// <param name="original">Show the ID of the underlying Object</param>
         /// <param name="recursive">Recurse into the listing</param>
         /// <param name="stat">Just return the info for the pointed to file</param>
-        public static CommandLineBuilder LsJSon(string remotePath,
+        public static RcloneOptionsBuilder LsJSon(string remotePath,
                                                 bool dirsOnly = false,
                                                 bool encrypted = false,
                                                 bool filesOnly = false,
@@ -534,7 +534,7 @@ namespace RcloneWrapper
         /// <summary>
         /// List the objects in path with modification time, size and path.
         /// </summary>
-        public static CommandLineBuilder LSL(string remotePath, IOptionsBuilder options = null) => new(options, "lsl", remotePath);
+        public static RcloneOptionsBuilder LSL(string remotePath, IOptionsBuilder options = null) => new(options, "lsl", remotePath);
 
 
         /// <summary>
@@ -543,9 +543,9 @@ namespace RcloneWrapper
         /// <param name="remotePath">The remote path to mount</param>
         /// <param name="mountPath">The location that will contain the mount</param>
         /// <param name="options">Option for libfuse/WinFsp</param>
-        public static CommandLineBuilder Mount(string remotePath, string mountPath, VFS_OptionsBuilder options = null)
+        public static RcloneOptionsBuilder Mount(string remotePath, string mountPath, VFS_OptionsBuilder options = null)
         {
-            var ret = new CommandLineBuilder("mount", remotePath, mountPath);
+            var ret = new RcloneOptionsBuilder("mount", remotePath, mountPath);
 
             if (options != null)
                 ret.AddOptions(options);
@@ -559,7 +559,7 @@ namespace RcloneWrapper
         /// </summary>
         /// <param name="createEmptySrcDirs"></param>
         /// <param name="deleteEmptySrcDirs"></param>
-        public static CommandLineBuilder Move(string remotePathSrc,
+        public static RcloneOptionsBuilder Move(string remotePathSrc,
                                               string remotePathDst,
                                               bool createEmptySrcDirs = false,
                                               bool deleteEmptySrcDirs = false, 
@@ -570,19 +570,19 @@ namespace RcloneWrapper
         /// <summary>
         /// Move file or directory from source to dest.
         /// </summary>
-        public static CommandLineBuilder MoveTo(string remotePathSrc, string remotePathDst, IOptionsBuilder options = null) => new(options, "moveto", remotePathSrc, remotePathDst);
+        public static RcloneOptionsBuilder MoveTo(string remotePathSrc, string remotePathDst, IOptionsBuilder options = null) => new(options, "moveto", remotePathSrc, remotePathDst);
 
 
         /// <summary>
         /// Obscure password
         /// </summary>
-        public static CommandLineBuilder Obscure(string password) => new("obscure", password);
+        public static RcloneOptionsBuilder Obscure(string password) => new("obscure", password);
 
 
         /// <summary>
         /// Remove the path and all of its contents.
         /// </summary>
-        public static CommandLineBuilder Purge(string remotePath, IOptionsBuilder options = null) => new(options, "purge", remotePath);
+        public static RcloneOptionsBuilder Purge(string remotePath, IOptionsBuilder options = null) => new(options, "purge", remotePath);
 
 
         /// <summary>
@@ -597,7 +597,7 @@ namespace RcloneWrapper
         /// <param name="pass">Password to use to connect to rclone remote control</param>
         /// <param name="noOutput">If set, don't output the JSON result</param>
         /// <returns></returns>
-        public static CommandLineBuilder RC(IEnumerable<string> args = null,
+        public static RcloneOptionsBuilder RC(IEnumerable<string> args = null,
                                             string json = null,
                                             IEnumerable<string> opts = null,
                                             string url = null,
@@ -631,16 +631,16 @@ namespace RcloneWrapper
         /// Copies standard input to file on remote.
         /// </summary>
         /// <param name="size">File size hint to preallocate (default -1)</param>
-        public static CommandLineBuilder Rcat(string remotePath, int size = -1, IOptionsBuilder options = null) => new(options, "rcat", remotePath, size > -1 ? $"--size {size}" : null);
+        public static RcloneOptionsBuilder Rcat(string remotePath, int size = -1, IOptionsBuilder options = null) => new(options, "rcat", remotePath, size > -1 ? $"--size {size}" : null);
 
 
         /// <summary>
         /// Run rclone listening to remote control commands only.
         /// </summary>
         /// <returns></returns>
-        public static CommandLineBuilder RCD(VFS_OptionsBuilder options = null)
+        public static RcloneOptionsBuilder RCD(VFS_OptionsBuilder options = null)
         {
-            var ret = new CommandLineBuilder("rcd");
+            var ret = new RcloneOptionsBuilder("rcd");
 
             if (options != null)
                 ret.AddOptions(options);
@@ -652,14 +652,14 @@ namespace RcloneWrapper
         /// <summary>
         /// Remove the empty directory at path.
         /// </summary>
-        public static CommandLineBuilder RmDir(string remotePath, IOptionsBuilder options = null) => new(options, "rmdir", remotePath);
+        public static RcloneOptionsBuilder RmDir(string remotePath, IOptionsBuilder options = null) => new(options, "rmdir", remotePath);
 
 
         /// <summary>
         /// Remove empty directories under the path.
         /// </summary>
         /// <param name="leaveRoot">Do not remove root directory if empty</param>
-        public static CommandLineBuilder RmDirs(string remotePath, bool leaveRoot = false, IOptionsBuilder options = null) =>
+        public static RcloneOptionsBuilder RmDirs(string remotePath, bool leaveRoot = false, IOptionsBuilder options = null) =>
             new(options, "rmdirs", remotePath, leaveRoot ? "--leave-root" : null);
 
 
@@ -673,7 +673,7 @@ namespace RcloneWrapper
         /// <param name="stable">Install stable release (this is the default)</param>
         /// <param name="version">Install the given rclone version (default: latest)</param>
         /// <returns></returns>
-        public static CommandLineBuilder SelfUpdate(bool beta = false,
+        public static RcloneOptionsBuilder SelfUpdate(bool beta = false,
                                                     bool check = false,
                                                     string output = null,
                                                     string package = null,
@@ -699,43 +699,43 @@ namespace RcloneWrapper
             /// <summary>
             /// Serve remote:path over DLNA
             /// </summary>
-            public static CommandLineBuilder DLNA(string remotePath, ServeDLNA_OptionsBuilder options = null) => new(options, "serve", "dlna", remotePath);
+            public static RcloneOptionsBuilder DLNA(string remotePath, ServeDLNA_OptionsBuilder options = null) => new(options, "serve", "dlna", remotePath);
 
             /// <summary>
             /// Serve any remote on docker's volume plugin API.
             /// </summary>
-            public static CommandLineBuilder Docker(string remotePath, ServeDocker_OptionsBuilder options = null) => new(options, "serve", "docker", remotePath);
+            public static RcloneOptionsBuilder Docker(string remotePath, ServeDocker_OptionsBuilder options = null) => new(options, "serve", "docker", remotePath);
 
 
             /// <summary>
             /// Serve remote:path over FTP.
             /// </summary>
-            public static CommandLineBuilder FTP(string remotePath, ServeFTP_OptionsBuilder options = null) => new(options, "serve", "ftp", remotePath);
+            public static RcloneOptionsBuilder FTP(string remotePath, ServeFTP_OptionsBuilder options = null) => new(options, "serve", "ftp", remotePath);
 
 
 
             /// <summary>
             /// Serve the remote over HTTP.
             /// </summary>
-            public static CommandLineBuilder HTTP(string remotePath, ServeHTTP_OptionsBuilder options = null) => new(options, "serve", "http", remotePath);
+            public static RcloneOptionsBuilder HTTP(string remotePath, ServeHTTP_OptionsBuilder options = null) => new(options, "serve", "http", remotePath);
 
 
 
             /// <summary>
             /// Serve the remote for restic's REST API.
             /// </summary>
-            public static CommandLineBuilder Restic(string remotePath, ServeRestic_OptionsBuilder options = null) => new(options, "serve", "restic", remotePath);
+            public static RcloneOptionsBuilder Restic(string remotePath, ServeRestic_OptionsBuilder options = null) => new(options, "serve", "restic", remotePath);
 
 
             /// <summary>
             /// Serve the remote over SFTP.
             /// </summary>
-            public static CommandLineBuilder SFTP(string remotePath, ServeSFTP_OptionsBuilder options = null) => new(options, "serve", "sftp", remotePath);
+            public static RcloneOptionsBuilder SFTP(string remotePath, ServeSFTP_OptionsBuilder options = null) => new(options, "serve", "sftp", remotePath);
 
             /// <summary>
             /// Serve the remote over WebDav.
             /// </summary>
-            public static CommandLineBuilder WebDav(string remotePath, ServeWebDav_OptionsBuilder options = null) => new(options, "serve", "webdav", remotePath);
+            public static RcloneOptionsBuilder WebDav(string remotePath, ServeWebDav_OptionsBuilder options = null) => new(options, "serve", "webdav", remotePath);
 
         }
 
@@ -743,19 +743,19 @@ namespace RcloneWrapper
         /// <summary>
         /// Changes storage class/tier of objects in remote.
         /// </summary>
-        public static CommandLineBuilder SetTier(string remotePath, string tier, IOptionsBuilder options = null) => new(options, "settier", tier, remotePath);
+        public static RcloneOptionsBuilder SetTier(string remotePath, string tier, IOptionsBuilder options = null) => new(options, "settier", tier, remotePath);
 
         /// <summary>
         /// Prints the total size and number of objects in remote:path.
         /// </summary>
         /// <param name="json">Format output as JSON</param>
-        public static CommandLineBuilder Size(string remotePath, bool json = false, IOptionsBuilder options = null) => new(options, "size", remotePath, json ? "--json" : null);
+        public static RcloneOptionsBuilder Size(string remotePath, bool json = false, IOptionsBuilder options = null) => new(options, "size", remotePath, json ? "--json" : null);
 
         /// <summary>
         /// Make source and dest identical, modifying destination only.
         /// </summary>
         /// <param name="createEmptySrcDirs">Create empty source dirs on destination after sync</param>
-        public static CommandLineBuilder Sync(string remotePathSrc, string remotePathDst, bool createEmptySrcDirs = false, IOptionsBuilder options = null)
+        public static RcloneOptionsBuilder Sync(string remotePathSrc, string remotePathDst, bool createEmptySrcDirs = false, IOptionsBuilder options = null)
             => new(options, "sync", remotePathSrc, remotePathDst, createEmptySrcDirs ? "--create-empty-src-dirs" : null);
 
 
@@ -766,7 +766,7 @@ namespace RcloneWrapper
         /// <param name="noCreate">Do not create the file if it does not exist (implied with --recursive)</param>
         /// <param name="recursive">Recursively touch all files</param>
         /// <param name="timestamp">Use specified time instead of the current time of day</param>
-        public static CommandLineBuilder Touch(string remotePath,
+        public static RcloneOptionsBuilder Touch(string remotePath,
                                                bool localTime = false,
                                                bool noCreate = false,
                                                bool recursive = false,
@@ -807,7 +807,7 @@ namespace RcloneWrapper
         /// <param name="sortReverse">Reverse the order of the sort</param>
         /// <param name="unsorted">Leave files unsorted</param>
         /// <param name="version">Sort files alphanumerically by version</param>
-        public static CommandLineBuilder Tree(string remotePath,
+        public static RcloneOptionsBuilder Tree(string remotePath,
                                               bool all = false,
                                               bool color = false,
                                               bool dirsOnly = false,
@@ -860,6 +860,6 @@ namespace RcloneWrapper
         /// Show the version number.
         /// </summary>
         /// <param name="check">Check for new version</param>
-        public static CommandLineBuilder Version(bool check = false) => new("version", check ? "--check" : null);
+        public static RcloneOptionsBuilder Version(bool check = false) => new("version", check ? "--check" : null);
     }
 }
