@@ -3,8 +3,8 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,18 +15,33 @@ namespace RcloneWrapper
     {
         public string RcloneExe { get; set; } = "rclone";
         private readonly ILogger<Rclone> _logger;
+        private readonly ILoggerFactory _loggerFactory;
 
-        public Rclone()
-        {
-            _logger = new NullLogger<Rclone>();
-        }
 
-        public Rclone(ILoggerFactory loggerFactory)
+        private Rclone(ILoggerFactory loggerFactory)
         {
             _logger = loggerFactory.CreateLogger<Rclone>();
+            _loggerFactory = loggerFactory;
         }
 
-        private Process CreateProcess(string args)
+
+        public static Rclone Create(ILoggerFactory loggerFactory, string executableFile = "/usr/bin/rclone")
+        {
+            return new Rclone(loggerFactory)
+            {
+                RcloneExe = executableFile,
+            };
+        }
+
+        public static Rclone Create(string executableFile)
+        {
+            return new Rclone(new NullLoggerFactory())
+            {
+                RcloneExe = executableFile,
+            };
+        }
+
+        private Process CreateProcess(string args, CancellationToken cancellationToken)
         {
             var process = new Process();
             process.StartInfo.FileName = RcloneExe;
@@ -34,19 +49,62 @@ namespace RcloneWrapper
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.RedirectStandardError = true;
             process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
-            
+
             process.Start();
+            RegisterProcessCancellation(process, cancellationToken);
 
             return process;
         }
 
-        private static async Task WaitForProcessAsync(Process proc, CancellationToken cancellationToken)
+        public async Task RunAsync(RcloneOptionsBuilder commandLine,
+            IProgress<RcloneLog> progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            commandLine.AddOption("-v");
+            commandLine.AddOption("--use-json-log");
+            commandLine.AddOption("--stats 1s");
+
+            var args = commandLine.Build();
+            var proc = CreateProcess(args, cancellationToken);
+            var cancellationTokenSource = new CancellationTokenSource();
+            var messageChanel = Channel.CreateBounded<string>(new BoundedChannelOptions(100)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+            var processTask = Task.Run(async () =>
+            {
+                await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                cancellationTokenSource.Cancel();
+                
+                _logger.LogInformation("Process exited.");
+            }, cancellationToken);
+
+            var task2 = ProcessLogStreamConsumer.Start(
+                proc.StandardError,
+                messageChanel,
+                _loggerFactory.CreateLogger<ProcessLogStreamConsumer>(),
+                cancellationTokenSource.Token);
+
+            var task3 = MessageQueueConsumer.Start(
+                messageChanel,
+                progress,
+                _loggerFactory.CreateLogger<MessageQueueConsumer>(),
+                cancellationTokenSource.Token);
+
+            await Task.WhenAll(processTask, task2, task3).ConfigureAwait(false);
+            CheckExitCode(proc);
+        }
+
+        private void RegisterProcessCancellation(Process process, CancellationToken cancellationToken)
         {
             cancellationToken.Register(() =>
             {
                 try
                 {
-                    proc.Kill();
+                    process.Kill();
                 }
                 catch (Exception ex)
                 {
@@ -55,110 +113,27 @@ namespace RcloneWrapper
             }, false);
         }
 
-        public record RcloneLogStatus(
-            long Bytes,
-            int Checks,
-            float ElapsedTime,
-            int Errors,
-            bool FatalError,
-            string LastError,
-            int Renames,
-            bool RetryError,
-            float Speed,
-            long TotalBytes,
-            int TotalChecks,
-            int TotalTransfers,
-            float TransferTime,
-            int Transfers)
+        private void CheckExitCode(Process process)
         {
-            
-        }
-
-        public record RcloneLog(string Level, string Msg, DateTime Time, RcloneLogStatus Stats)
-        {
-        }
-
-        public async Task<int> RunAsync(
-            RcloneOptionsBuilder commandLine,
-            IProgress<RcloneLog> progress = null,
-            CancellationToken cancellationToken = default)
-        {
-
-            commandLine.AddOption("-v");
-            commandLine.AddOption("--use-json-log");
-            commandLine.AddOption("--stats 1s");
-
-            var args = commandLine.Build();
-            _logger.LogDebug("Spawning rclone with {0}", args);
-            
-            using var proc = CreateProcess(args);
-            var concurrentQueue = new ConcurrentQueue<string>();
-
-            var task2 = Task.Run(() =>
+            if (process.ExitCode is 0 or 9)
             {
-                while (!proc.StandardError.EndOfStream)
-                {
-                    _logger.LogTrace("Is cancellation requested? {0}", cancellationToken.IsCancellationRequested);
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    // For some reason rclone only outputs to standard errors when using -v --use-json-log
-                    var line = proc.StandardError.ReadLine();
-                    if (line is not null)
-                    {
-                        concurrentQueue.Enqueue(line);
-                    }
-
-                    _logger.LogTrace("Reached end of stream");
-                }
-            }, cancellationToken);
-
-            var processTask =
-                Task.Run(async () => { await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false); },
-                    cancellationToken);
-
-
-            var task3 = Task.Run(() =>
-            {
-                while (!(proc.HasExited && concurrentQueue.IsEmpty))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (!concurrentQueue.TryDequeue(out var newLog)) continue;
-
-                    try
-                    {
-                        var parsedLog = JsonSerializer.Deserialize<RcloneLog>(newLog, new JsonSerializerOptions() { PropertyNameCaseInsensitive = true });
-                        progress?.Report(parsedLog);
-                    }
-                    catch (Exception ex)
-                    {
-                        // TODO: put some logs. 
-                    }
-                }
-            }, cancellationToken);
-
-            await Task.WhenAll(processTask, task2, task3).ConfigureAwait(false);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (proc.ExitCode != 0 && proc.ExitCode != 9)
-            {
-                var msg = proc.ExitCode switch
-                {
-                    1 => "Syntax or usage error",
-                    2 => "Error not otherwise categorised",
-                    3 => "Directory not found",
-                    4 => "File not found",
-                    5 => "Temporary error, retries might fix",
-                    6 => "Less serious errors",
-                    7 => "Fatal error",
-                    8 => "Transfer exceeded - limit set by --max-transfer reached",
-                    _ => "Unknown error"
-                };
-
-                throw new RcloneException(proc.ExitCode, msg, args);
+                return;
             }
 
-            return proc.ExitCode;
+            var msg = process.ExitCode switch
+            {
+                1 => "Syntax or usage error",
+                2 => "Error not otherwise categorised",
+                3 => "Directory not found",
+                4 => "File not found",
+                5 => "Temporary error, retries might fix",
+                6 => "Less serious errors",
+                7 => "Fatal error",
+                8 => "Transfer exceeded - limit set by --max-transfer reached",
+                _ => "Unknown error"
+            };
+
+            throw new RcloneException(process.ExitCode, msg, process.StartInfo.Arguments);
         }
     }
 }

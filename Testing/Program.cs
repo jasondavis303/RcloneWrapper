@@ -5,14 +5,15 @@ using Microsoft.Extensions.Logging;
 using RcloneWrapper;
 
 
-async Task Test(ILoggerFactory factory, IConfiguration configuration)
+// This should act as an example of how to use the library. (and also a test)
+async Task Test(ILoggerFactory logFactory, IConfiguration configuration)
 {
     var localPath = configuration.GetValue<string>("localPath");
     var remotePath = configuration.GetValue<string>("remotePath");
-    var logger = factory.CreateLogger<Program>();
-
+    var logger = logFactory.CreateLogger<Program>();
 
     var fileId = Guid.NewGuid();
+    
     var commandLine = RcloneOptionsBuilder.CopyTo(
         localPath,
         remotePath!.Replace("{$random}", fileId.ToString()));
@@ -21,20 +22,35 @@ async Task Test(ILoggerFactory factory, IConfiguration configuration)
 
     try
     {
-        await new Rclone(factory) { RcloneExe = "/usr/bin/rclone" }
+        await Rclone
+            .Create(logFactory) 
             .RunAsync(commandLine,
-                new Progress<Rclone.RcloneLog>((log) =>
+                new Progress<RcloneLog>((log) =>
                 {
-                    logger.LogInformation("received new log: {0} {1}, {2}", log.Level, log.Stats, log.Time);
+                    if (log.Stats is null)
+                    {
+                        return;
+                    }
+                    
+                    switch (log.Level)
+                    {
+                        case "info":
+                            var stats = log.Stats;
+                            logger.LogInformation(
+                                "Speed: {0}MB/s, Percentage: {1}%",
+                                stats.Speed / (1024 * 1024),
+                                ((float) stats.Bytes / stats.TotalBytes) * 100);
+                            break;        
+                    }
                 }));
+        
+        logger.LogInformation("Finished job of uploading file.");
     }
     catch (RcloneException ex)
     {
         logger.LogError(ex, "Failed when trying to run rclone command {0}", ex.ProvidedArgs);
     }
 
-
-    return;
 }
 
 using var loggerFactory = LoggerFactory.Create(builder =>
