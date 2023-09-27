@@ -3,184 +3,137 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RcloneWrapper
 {
     public class Rclone
     {
-        /// <summary>
-        /// Use --quiet --progress --stats-one-line, without any -v for the best experience
-        /// </summary>
-        public event EventHandler<int> OnProgress;
-       
         public string RcloneExe { get; set; } = "rclone";
+        private readonly ILogger<Rclone> _logger;
+        private readonly ILoggerFactory _loggerFactory;
 
-        private Process CreateProcess(string args, bool redirectStandardOutput)
+
+        private Rclone(ILoggerFactory loggerFactory)
         {
-
-            var psi = new ProcessStartInfo
-            {
-                FileName = RcloneExe,
-                Arguments = args,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-
-            if (redirectStandardOutput)
-            {
-                psi.RedirectStandardOutput = true;
-                psi.StandardOutputEncoding = Encoding.UTF8;
-            }
-
-            return new Process { StartInfo = psi };
+            _logger = loggerFactory.CreateLogger<Rclone>();
+            _loggerFactory = loggerFactory;
         }
 
-        private static async Task WaitForProcessAsync(Process proc, CancellationToken cancellationToken)
+
+        public static Rclone Create(ILoggerFactory loggerFactory, string executableFile = "/usr/bin/rclone")
+        {
+            return new Rclone(loggerFactory)
+            {
+                RcloneExe = executableFile,
+            };
+        }
+
+        public static Rclone Create(string executableFile)
+        {
+            return new Rclone(new NullLoggerFactory())
+            {
+                RcloneExe = executableFile,
+            };
+        }
+
+        private Process CreateProcess(string args, CancellationToken cancellationToken)
+        {
+            var process = new Process();
+            process.StartInfo.FileName = RcloneExe;
+            process.StartInfo.Arguments = args;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.StandardErrorEncoding = Encoding.UTF8;
+
+            process.Start();
+            RegisterProcessCancellation(process, cancellationToken);
+
+            return process;
+        }
+
+        public async Task RunAsync(RcloneOptionsBuilder commandLine,
+            IProgress<RcloneLog> progress = null,
+            CancellationToken cancellationToken = default)
+        {
+            commandLine.AddOption("-v");
+            commandLine.AddOption("--use-json-log");
+            commandLine.AddOption("--stats 1s");
+
+            var args = commandLine.Build();
+            var proc = CreateProcess(args, cancellationToken);
+            var cancellationTokenSource = new CancellationTokenSource();
+            var messageChanel = Channel.CreateBounded<string>(new BoundedChannelOptions(100)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+
+            var processTask = Task.Run(async () =>
+            {
+                await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                cancellationTokenSource.Cancel();
+                
+                _logger.LogInformation("Process exited.");
+            }, cancellationToken);
+
+            var task2 = ProcessLogStreamConsumer.Start(
+                proc.StandardError,
+                messageChanel,
+                _loggerFactory.CreateLogger<ProcessLogStreamConsumer>(),
+                cancellationTokenSource.Token);
+
+            var task3 = MessageQueueConsumer.Start(
+                messageChanel,
+                progress,
+                _loggerFactory.CreateLogger<MessageQueueConsumer>(),
+                cancellationTokenSource.Token);
+
+            await Task.WhenAll(processTask, task2, task3).ConfigureAwait(false);
+            CheckExitCode(proc);
+        }
+
+        private void RegisterProcessCancellation(Process process, CancellationToken cancellationToken)
         {
             cancellationToken.Register(() =>
             {
-                try { proc.Kill(); }
-                catch { }
-
-            }, false);
-
-            proc.Start();
-            await proc.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-
-            if (proc.ExitCode != 0 && proc.ExitCode != 9)
-            {
-                string msg = proc.ExitCode switch
-                {
-                    1 => "Syntax or usage error",
-                    2 => "Error not otherwise categorised",
-                    3 => "Directory not found",
-                    4 => "File not found",
-                    5 => "Temporary error, retries might fix",
-                    6 => "Less serious errors",
-                    7 => "Fatal error",
-                    8 => "Transfer exceeded - limit set by --max-transfer reached",
-                    _ => "Unknown error"
-                };
-
-                Exception innerException = null;
                 try
                 {
-                    var innerMsg = proc.StandardError.ReadToEnd();
-                    if (!string.IsNullOrWhiteSpace(innerMsg))
-                        innerException = new Exception(innerMsg);
+                    process.Kill();
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    // TODO: put some logs 
+                }
+            }, false);
+        }
 
-                throw new RcloneException(proc.ExitCode, msg, innerException);
+        private void CheckExitCode(Process process)
+        {
+            if (process.ExitCode is 0 or 9)
+            {
+                return;
             }
-        }
 
-        public async Task<int> RunAsync(string args, IProgress<int> progress = null, CancellationToken cancellationToken = default)
-        {
-            using var proc = CreateProcess(args, true);
-
-            var task1 = WaitForProcessAsync(proc, cancellationToken);
-
-
-            //Logic here:  stats will write output to the console as fast as it wants, and will NOT wait
-            //for EventHandler to finish. And... there is no end of line marker, so it just
-            //keeps writing and makes the parsing more difficult.
-            //And I can't figure out how to do a true 'fire and forget'.
-
-            //So my bad solution: As fast as data comes in, possible, add new progresses to a ConcurrentQueue, and 
-            //use another task to pull objects out and invoke the EventHandler
-
-            //My better but not yet available solution: I asked the rclone dev team to put a trailing \0 char at the end
-            //of the line
-
-            //Until then, I'm doing a simple search for percent only
-
-            var cq = new ConcurrentQueue<int>();
-
-            var task2 = Task.Run(() =>
+            var msg = process.ExitCode switch
             {
-                string data = null;
+                1 => "Syntax or usage error",
+                2 => "Error not otherwise categorised",
+                3 => "Directory not found",
+                4 => "File not found",
+                5 => "Temporary error, retries might fix",
+                6 => "Less serious errors",
+                7 => "Fatal error",
+                8 => "Transfer exceeded - limit set by --max-transfer reached",
+                _ => "Unknown error"
+            };
 
-                int lastPercent = 0;
-
-                Span<char> buffer = new char[1024];
-                while (true)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    int read = proc.StandardOutput.Read(buffer);
-                    if (read < 1)
-                        return;
-
-                    data = buffer[..read].ToString();
-                    var parts = data.Split(',');
-                    foreach (string part in parts.Where(item => item.Trim().EndsWith('%')))
-                        if (int.TryParse(part.Trim().Trim('%'), out int newPercent))
-                            if (newPercent != lastPercent)
-                            {
-                                lastPercent = newPercent;
-                                cq.Enqueue(newPercent);
-                            }
-                }
-            }, cancellationToken);
-
-
-
-            var task3 = Task.Run(() =>
-            {
-                while (!(proc.HasExited && cq.IsEmpty))
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (cq.TryDequeue(out int newProgress))
-                    {
-                        try { OnProgress?.Invoke(this, newProgress); }
-                        catch { }
-                        try { progress?.Report(newProgress); }
-                        catch { }
-                    }
-                }
-            }, cancellationToken);
-
-            await Task.WhenAll(task1, task2, task3).ConfigureAwait(false);
-
-            return proc.ExitCode;
+            throw new RcloneException(process.ExitCode, msg, process.StartInfo.Arguments);
         }
-
-        /// <summary>
-        /// Designed to be run with args: --quiet --progress --stats-one-line, without any -v
-        /// </summary>
-        public Task<int> RunAsync(CommandLineBuilder builder, IProgress<int> progress = null, CancellationToken cancellationToken = default) =>
-            RunAsync(builder.Build(), progress, cancellationToken);
-
-
-        /// <summary>
-        /// Runs a command and deserializes the json output into an object
-        /// </summary>
-        public async Task<T> GetJsonAsync<T>(string args, CancellationToken cancellationToken = default)
-        {
-            using var proc = CreateProcess(args, true);
-            var task1 = WaitForProcessAsync(proc, cancellationToken);
-            var task2 = JsonSerializer.DeserializeAsync<T>(proc.StandardOutput.BaseStream, cancellationToken: cancellationToken).AsTask();
-            await Task.WhenAll(task1, task2).ConfigureAwait(false);
-            return task2.Result;
-        }
-
-        /// <summary>
-        /// Runs a command and deserializes the json output into an object
-        /// </summary>
-        public Task<T> GetJsonAsync<T>(CommandLineBuilder builder, CancellationToken cancellationToken = default) =>
-            GetJsonAsync<T>(builder.Build(), cancellationToken);
-
-
-
     }
 }
