@@ -11,6 +11,9 @@ namespace RcloneWrapper
 {
     public class Rclone
     {
+        private static readonly JsonSerializerOptions _jsonSerializerOptions = new(JsonSerializerDefaults.Web);
+
+
         /// <summary>
         /// Use --quiet --progress --stats-one-line, without any -v for the best experience
         /// </summary>
@@ -169,7 +172,7 @@ namespace RcloneWrapper
         {
             using var proc = CreateProcess(args, true);
             var task1 = WaitForProcessAsync(proc, cancellationToken);
-            var task2 = JsonSerializer.DeserializeAsync<T>(proc.StandardOutput.BaseStream, cancellationToken: cancellationToken).AsTask();
+            var task2 = JsonSerializer.DeserializeAsync<T>(proc.StandardOutput.BaseStream, _jsonSerializerOptions, cancellationToken: cancellationToken).AsTask();
             await Task.WhenAll(task1, task2).ConfigureAwait(false);
             return task2.Result;
         }

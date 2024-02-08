@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>net6;net7;net8</TargetFrameworks>
     <Authors>Jason Davis</Authors>
     <Company>jasondavis303</Company>
     <Description>Command line wrapper for rclone</Description>
