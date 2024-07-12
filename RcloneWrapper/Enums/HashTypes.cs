@@ -1,12 +1,11 @@
 ﻿using System;
 
-namespace RcloneWrapper.Enums
+namespace RcloneWrapper.Enums;
+
+[Flags]
+public enum HashTypes
 {
-    [Flags]
-    public enum HashTypes
-    {
-        MD5 = 1,
-        SHA1 = 2,
-        DropBox = 4
-    }
+    MD5 = 1,
+    SHA1 = 2,
+    DropBox = 4
 }

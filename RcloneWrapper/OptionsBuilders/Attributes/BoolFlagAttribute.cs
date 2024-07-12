@@ -1,26 +1,25 @@
 ﻿using System.Collections.Generic;
 
-namespace RcloneWrapper.OptionsBuilders.Attributes
+namespace RcloneWrapper.OptionsBuilders.Attributes;
+
+internal class BoolFlagAttribute : FlagAttributeBase
 {
-    internal class BoolFlagAttribute : FlagAttributeBase
+    private readonly bool _defaultValue;
+
+    public BoolFlagAttribute(string flag, bool defaultValue = false) : base(flag) => _defaultValue = defaultValue;
+
+    public override void AddArg(List<string> args, string prefix, object val)
     {
-        private readonly bool _defaultValue;
+        if (val == null)
+            return;
 
-        public BoolFlagAttribute(string flag, bool defaultValue = false) : base(flag) => _defaultValue = defaultValue;
-
-        public override void AddArg(List<string> args, string prefix, object val)
+        bool bval = (bool)val;
+        if (bval != _defaultValue)
         {
-            if (val == null)
-                return;
-
-            bool bval = (bool)val;
-            if (bval != _defaultValue)
-            {
-                if (bval)
-                    args.Add($"--{prefix}{Flag}");
-                else
-                    args.Add($"--{prefix}{Flag}=false");
-            }
+            if (bval)
+                args.Add($"--{prefix}{Flag}");
+            else
+                args.Add($"--{prefix}{Flag}=false");
         }
     }
 }
