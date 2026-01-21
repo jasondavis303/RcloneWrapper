@@ -20,9 +20,8 @@ public class Rclone
    
     public string RcloneExe { get; set; } = "rclone";
 
-    private Process CreateProcess(string args, bool redirectStandardOutput)
+    private Process CreateProcess(string args)
     {
-
         var psi = new ProcessStartInfo
         {
             FileName = RcloneExe,
@@ -31,14 +30,10 @@ public class Rclone
             CreateNoWindow = true,
             ErrorDialog = false,
             RedirectStandardError = true,
-            StandardErrorEncoding = Encoding.UTF8
+            StandardErrorEncoding = Encoding.UTF8,
+            RedirectStandardOutput = true,
+            StandardOutputEncoding = Encoding.UTF8
         };
-
-        if (redirectStandardOutput)
-        {
-            psi.RedirectStandardOutput = true;
-            psi.StandardOutputEncoding = Encoding.UTF8;
-        }
 
         return new Process { StartInfo = psi };
     }
@@ -91,7 +86,7 @@ public class Rclone
 
     public async Task<int> RunAsync(string args, IProgress<int> progress = null, CancellationToken cancellationToken = default)
     {
-        using var proc = CreateProcess(args, true);
+        using var proc = CreateProcess(args);
 
         var task1 = WaitForProcessAsync(proc, cancellationToken);
 
@@ -176,7 +171,7 @@ public class Rclone
     /// </summary>
     public async Task<T> GetJsonAsync<T>(string args, CancellationToken cancellationToken = default)
     {
-        using var proc = CreateProcess(args, true);
+        using var proc = CreateProcess(args);
         var task1 = WaitForProcessAsync(proc, cancellationToken);
         var task2 = JsonSerializer.DeserializeAsync<T>(proc.StandardOutput.BaseStream, _jsonSerializerOptions, cancellationToken: cancellationToken).AsTask();
         await Task.WhenAll(task1, task2).ConfigureAwait(false);
