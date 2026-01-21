@@ -13,7 +13,6 @@ public class Rclone
 {
     private static readonly JsonSerializerOptions _jsonSerializerOptions = new(JsonSerializerDefaults.Web);
 
-
     /// <summary>
     /// Use --quiet --progress --stats-one-line, without any -v for the best experience
     /// </summary>
@@ -61,16 +60,19 @@ public class Rclone
 
         if (proc.ExitCode != 0 && proc.ExitCode != 9)
         {
+            //https://rclone.org/docs/#list-of-exit-codes
             string msg = proc.ExitCode switch
             {
-                1 => "Syntax or usage error",
-                2 => "Error not otherwise categorised",
+                1 => "Error not otherwise categorised",
+                2 => "Syntax or usage error",
                 3 => "Directory not found",
                 4 => "File not found",
-                5 => "Temporary error, retries might fix",
-                6 => "Less serious errors",
-                7 => "Fatal error",
-                8 => "Transfer exceeded - limit set by --max-transfer reached",
+                5 => "Temporary error (one that more retries might fix) (Retry errors)",
+                6 => "Less serious errors (like 461 errors from dropbox) (NoRetry errors)",
+                7 => "Fatal error (one that more retries won't fix, like account suspended) (Fatal errors)",
+                8 => "Transfer exceeded - limit set by --max-transfer reachedd",
+                9 => "Operation successful, but no files transferred (Requires --error-on-no-transfer)",
+                10 => "Duration exceeded - limit set by --max-duration reached",
                 _ => "Unknown error"
             };
 
@@ -99,7 +101,7 @@ public class Rclone
         //keeps writing and makes the parsing more difficult.
         //And I can't figure out how to do a true 'fire and forget'.
 
-        //So my bad solution: As fast as data comes in, possible, add new progresses to a ConcurrentQueue, and 
+        //So my bad solution: As fast as data comes in, as fast as possible, add new progresses to a ConcurrentQueue, and 
         //use another task to pull objects out and invoke the EventHandler
 
         //My better but not yet available solution: I asked the rclone dev team to put a trailing \0 char at the end
@@ -125,13 +127,16 @@ public class Rclone
                     return;
 
                 data = buffer[..read].ToString();
-                var parts = data.Split(',');
-                foreach (string part in parts.Where(item => item.Trim().EndsWith('%')))
-                    if (int.TryParse(part.Trim().Trim('%'), out int newPercent))
+                var parts = data.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                foreach (string part in parts.Where(item => item.StartsWith(' ') && item.EndsWith('%')))
+                    if (int.TryParse(part.Trim(' ', '%'), out int newPercent))
                         if (newPercent != lastPercent)
                         {
-                            lastPercent = newPercent;
-                            cq.Enqueue(newPercent);
+                            if (newPercent >= 0 && newPercent <= 100)
+                            {
+                                lastPercent = newPercent;
+                                cq.Enqueue(newPercent);
+                            }
                         }
             }
         }, cancellationToken);
